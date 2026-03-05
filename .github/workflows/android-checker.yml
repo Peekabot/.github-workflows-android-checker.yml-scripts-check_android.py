@@ -2,8 +2,8 @@ name: Check X Chat Android Launch
 
 on:
   schedule:
-    # Runs every 4 hours
-    - cron: '0 */4 * * *'
+    # Runs every 2 hours
+    - cron: '0 */2 * * *'
   workflow_dispatch: # Manual trigger for testing
 
 jobs:
@@ -30,12 +30,12 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: python scripts/check_android.py
 
-      - name: Store detection history
+      - name: Commit detection state
         if: always()
         run: |
-          echo "$(date): checked" >> history.log
+          echo "$(date -u): checked" >> history.log
           git config --global user.name 'github-actions'
           git config --global user.email 'actions@github.com'
-          git add history.log
-          git commit -m "Update detection history [skip ci]" || exit 0
-          git push
+          git add history.log last_alert_hash.txt detections.json 2>/dev/null || true
+          git commit -m "Update detection state [skip ci]" || echo "No changes to commit"
+          git push || echo "Push skipped"
