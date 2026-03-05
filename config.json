@@ -1,0 +1,11 @@
+{
+  "_comment": "Static config. For niche, set the NICHE Actions variable instead (business | coding | creative | productivity).",
+  "price_cents": 1900,
+  "prompt_count": 10,
+  "cron": "0 9 * * 1",
+  "sources": {
+    "trend_finder": ["perplexity", "openai", "fallback"],
+    "deployment": ["gumroad"]
+  },
+  "notifications": ["telegram", "slack", "discord"]
+}
