@@ -13,7 +13,7 @@ import os
 import sys
 import json
 import re
-import requests
+import anthropic
 from datetime import datetime
 from pathlib import Path
 
@@ -50,10 +50,10 @@ def system_prompt():
     return SYSTEM_PROMPTS.get(NICHE, SYSTEM_PROMPTS["business"])
 
 
-def generate_via_openai(topic: str) -> list[dict]:
-    api_key = os.getenv("OPENAI_API_KEY")
+def generate_via_claude(topic: str) -> list[dict]:
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
-        raise RuntimeError("OPENAI_API_KEY not set")
+        raise RuntimeError("ANTHROPIC_API_KEY not set")
 
     user_msg = f"""Create {PROMPT_COUNT} high-quality, immediately usable AI prompts about "{topic}".
 
@@ -64,33 +64,17 @@ Return ONLY a valid JSON array. Each element must have exactly these keys:
 
 No markdown fences, no explanation outside the JSON array."""
 
-    payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {"role": "system", "content": system_prompt()},
-            {"role": "user", "content": user_msg},
-        ],
-        "temperature": 0.8,
-        "response_format": {"type": "json_object"},
-    }
-
-    resp = requests.post(
-        "https://api.openai.com/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=60,
+    client = anthropic.Anthropic(api_key=api_key)
+    response = client.messages.create(
+        model="claude-opus-4-6",
+        max_tokens=4096,
+        system=system_prompt(),
+        messages=[{"role": "user", "content": user_msg}],
     )
-    resp.raise_for_status()
 
-    raw = resp.json()["choices"][0]["message"]["content"]
-
-    # gpt-4o with json_object wraps in an object; unwrap if needed
+    raw = response.content[0].text
     parsed = json.loads(raw)
     if isinstance(parsed, dict):
-        # look for the list value
         for v in parsed.values():
             if isinstance(v, list):
                 return v
@@ -147,9 +131,9 @@ def main():
     print(f"Generating prompt pack for: {topic}", file=sys.stderr)
 
     try:
-        prompts = generate_via_openai(topic)
+        prompts = generate_via_claude(topic)
     except Exception as e:
-        print(f"OpenAI generation failed: {e}", file=sys.stderr)
+        print(f"Claude generation failed: {e}", file=sys.stderr)
         # Structured fallback so the pipeline never hard-fails
         prompts = [
             {

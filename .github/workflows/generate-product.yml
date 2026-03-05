@@ -23,12 +23,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests openai beautifulsoup4
+          pip install anthropic requests beautifulsoup4
 
       - name: Find trending topic
         id: trend
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
           NICHE: ${{ vars.NICHE }}
         run: |
@@ -39,7 +39,7 @@ jobs:
       - name: Generate prompt pack
         id: generate
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           NICHE: ${{ vars.NICHE }}
         run: |
           python scripts/generate_prompts.py "${{ steps.trend.outputs.trend }}"

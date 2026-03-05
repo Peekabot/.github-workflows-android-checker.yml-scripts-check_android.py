@@ -14,7 +14,7 @@ import os
 import sys
 import json
 import random
-import requests
+import anthropic
 from datetime import datetime
 
 NICHE = os.getenv("NICHE", "business").lower().strip()
@@ -105,48 +105,34 @@ def ask_perplexity():
         return None
 
 
-def ask_openai():
-    api_key = os.getenv("OPENAI_API_KEY")
+def ask_claude():
+    api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return None
 
     month = datetime.utcnow().strftime("%B %Y")
-    payload = {
-        "model": "gpt-4o",
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    f"You are a trend analyst specialising in {niche_description()}. "
-                    "Reply with ONLY a 2-4 word topic name, no explanation."
-                ),
-            },
-            {
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        response = client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=64,
+            system=(
+                f"You are a trend analyst specialising in {niche_description()}. "
+                "Reply with ONLY a 2-4 word topic name, no explanation."
+            ),
+            messages=[{
                 "role": "user",
                 "content": (
                     f"What is one high-interest topic in {niche_description()} "
                     f"that people are actively searching for in {month}? "
                     "Return just the topic name."
                 ),
-            },
-        ],
-        "temperature": 0.7,
-    }
-
-    try:
-        resp = requests.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=20,
+            }],
         )
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"].strip().strip('"')
+        return response.content[0].text.strip().strip('"')
     except Exception as e:
-        print(f"OpenAI error: {e}", file=sys.stderr)
+        print(f"Claude error: {e}", file=sys.stderr)
         return None
 
 
@@ -156,7 +142,7 @@ def pick_fallback():
 
 
 def main():
-    topic = ask_perplexity() or ask_openai() or pick_fallback()
+    topic = ask_perplexity() or ask_claude() or pick_fallback()
     # Sanitise for use as a folder name in the workflow
     topic = topic.replace("/", "-").replace("\\", "-")
     print(topic)
