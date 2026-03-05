@@ -28,8 +28,8 @@ NICHE_DESCRIPTIONS = {
 
 NICHE_FALLBACKS = {
     "business": [
-        "LinkedIn Thought Leadership",
         "Cold Email Sequences",
+        "LinkedIn Thought Leadership",
         "AI Sales Automation",
         "SaaS Pricing Strategy",
         "Startup Pitch Decks",
@@ -152,7 +152,7 @@ def ask_openai():
 
 def pick_fallback():
     options = NICHE_FALLBACKS.get(NICHE, NICHE_FALLBACKS["business"])
-    return random.choice(options)
+    return options[0]
 
 
 def main():
