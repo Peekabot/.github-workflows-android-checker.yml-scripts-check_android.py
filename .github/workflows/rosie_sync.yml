@@ -1,0 +1,23 @@
+name: Rosie Logistics Sync
+on:
+  repository_dispatch:
+    types: [jar_scan]
+  workflow_dispatch:
+jobs:
+  sync_to_cloud:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install deps
+        run: pip install myfitnesspal gspread oauth2client requests google-generativeai
+      - name: Run Rosie Logger
+        env:
+          MFP_USER: ${{ secrets.MFP_USER }}
+          MFP_PASS: ${{ secrets.MFP_PASS }}
+          G_SHEET_CREDS: ${{ secrets.G_SHEET_CREDS }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+        run: python log_rosie.py
