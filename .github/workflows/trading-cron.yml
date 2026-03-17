@@ -1,0 +1,45 @@
+name: Coinbase Trading Cron
+
+on:
+  schedule:
+    # Runs daily at 10:00 AM UTC
+    - cron: '0 10 * * *'
+  workflow_dispatch: # Manual trigger for testing
+
+jobs:
+  run-trading-script:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+
+      - name: Run trading script
+        env:
+          COINBASE_API_KEY: ${{ secrets.COINBASE_API_KEY }}
+          COINBASE_API_SECRET: ${{ secrets.COINBASE_API_SECRET }}
+          # Optional: set TRADE_PRODUCT_ID (e.g. BTC-USD), ORDER_SIZE, DRY_RUN
+          TRADE_PRODUCT_ID: ${{ vars.TRADE_PRODUCT_ID }}
+          ORDER_SIZE: ${{ vars.ORDER_SIZE }}
+          DRY_RUN: ${{ vars.DRY_RUN }}
+        run: python scripts/trade.py
+
+      - name: Commit trade log
+        if: always()
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'actions@github.com'
+          git add trade_log.jsonl 2>/dev/null || true
+          git commit -m "Update trade log [skip ci]" || echo "No changes to commit"
+          git push || echo "Push skipped"
