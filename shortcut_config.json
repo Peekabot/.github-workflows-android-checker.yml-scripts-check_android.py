@@ -1,0 +1,93 @@
+{
+  "_comment": "OpenPantry iOS Shortcut / NFC tag URL templates. Replace SCRIPT_ID with your deployed Apps Script ID.",
+
+  "base_url": "https://script.google.com/macros/s/SCRIPT_ID/exec",
+
+  "nfc_tags": [
+    {
+      "label": "Bread Pitt jar lid",
+      "asset_id": "YST_001",
+      "action": "feed",
+      "amount": 50,
+      "url": "https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=YST_001&action=feed&amount=50"
+    },
+    {
+      "label": "Doughvid 70 jar lid",
+      "asset_id": "YST_002",
+      "action": "feed",
+      "amount": 50,
+      "url": "https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=YST_002&action=feed&amount=50"
+    },
+    {
+      "label": "Rosie pot",
+      "asset_id": "ROS_001",
+      "action": "water",
+      "amount": 0,
+      "url": "https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=ROS_001&action=water"
+    },
+    {
+      "label": "Rosie pot (harvest)",
+      "asset_id": "ROS_001",
+      "action": "harvest",
+      "amount": 5,
+      "url": "https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=ROS_001&action=harvest&amount=5"
+    },
+    {
+      "label": "Thornelius pot",
+      "asset_id": "ROS_002",
+      "action": "water",
+      "amount": 0,
+      "url": "https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=ROS_002&action=water"
+    }
+  ],
+
+  "ios_shortcuts": [
+    {
+      "name": "Feed Bread Pitt",
+      "trigger": "NFC tag on jar lid OR home screen widget",
+      "steps": [
+        "Action: URL → https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=YST_001&action=feed&amount=50",
+        "Action: Open URLs"
+      ],
+      "tip": "Add to home screen. Tap once, see 🍞 confirmation. Done."
+    },
+    {
+      "name": "Water Rosie",
+      "trigger": "NFC tag on pot OR home screen widget",
+      "steps": [
+        "Action: URL → https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=ROS_001&action=water",
+        "Action: Open URLs"
+      ],
+      "tip": "Tap when you water. Keeps streak alive without any typing."
+    },
+    {
+      "name": "Harvest Rosie (ask amount)",
+      "trigger": "Manual from widget",
+      "steps": [
+        "Action: Ask for Input → 'Grams harvested?' (Number, default 5)",
+        "Action: URL → https://script.google.com/macros/s/SCRIPT_ID/exec?asset_id=ROS_001&action=harvest&amount=[Input]",
+        "Action: Open URLs"
+      ],
+      "tip": "One extra tap to enter grams. All other shortcuts are truly one-tap."
+    }
+  ],
+
+  "script_properties": {
+    "_comment": "Set these in Apps Script → Project Settings → Script Properties",
+    "SHEET_ID": "your-google-sheet-id-from-url",
+    "NTFY_TOPIC": "your-ntfy-topic",
+    "GH_TOKEN": "ghp_your-personal-access-token",
+    "GH_REPO": "Peekabot/your-repo-name"
+  },
+
+  "deploy_steps": [
+    "1. Open script.google.com → New Project → paste log_entry.gs",
+    "2. Project Settings → Script Properties → add the four keys above",
+    "3. Deploy → New Deployment → Web App → Execute as Me → Anyone can access",
+    "4. Copy the /exec URL and replace SCRIPT_ID in this file and in NFC tags",
+    "5. iOS: Open Shortcuts app → New Shortcut → Add Action: URL + Open URLs",
+    "6. iOS: Automation tab → New Automation → NFC → scan tag → run shortcut",
+    "7. Stick NTAG213 stickers (Amazon, ~$10 for 50) on jar lids and pots",
+    "8. Write URLs to tags using NFC Tools app (free, iOS/Android)"
+  ]
+}
