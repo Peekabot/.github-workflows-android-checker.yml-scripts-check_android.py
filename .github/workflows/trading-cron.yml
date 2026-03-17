@@ -2,8 +2,9 @@ name: Coinbase Trading Cron
 
 on:
   schedule:
-    # Runs daily at 10:00 AM UTC
-    - cron: '0 10 * * *'
+    # Runs every 6 hours: 00:00, 06:00, 12:00, 18:00 UTC
+    # Catches Thursday dip windows and early-weekday sell opportunities
+    - cron: '0 0,6,12,18 * * *'
   workflow_dispatch: # Manual trigger for testing
 
 jobs:
@@ -22,16 +23,28 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: |
-          pip install requests
+        run: pip install requests
 
       - name: Run trading script
         env:
           COINBASE_API_KEY: ${{ secrets.COINBASE_API_KEY }}
           COINBASE_API_SECRET: ${{ secrets.COINBASE_API_SECRET }}
-          # Optional: set TRADE_PRODUCT_ID (e.g. BTC-USD), ORDER_SIZE, DRY_RUN
-          TRADE_PRODUCT_ID: ${{ vars.TRADE_PRODUCT_ID }}
+          # --- Strategy tunables (set these as repo Variables) ---
+          # Comma-separated products to trade
+          TRADE_PRODUCTS: ${{ vars.TRADE_PRODUCTS }}
+          # Quote currency amount per BUY order (e.g. 10 = $10 USDC)
           ORDER_SIZE: ${{ vars.ORDER_SIZE }}
+          # Fraction of base balance to sell (0.5 = 50%)
+          SELL_FRACTION: ${{ vars.SELL_FRACTION }}
+          # % below SMA that triggers a buy (0.01 = 1%)
+          BUY_THRESHOLD: ${{ vars.BUY_THRESHOLD }}
+          # % above SMA that triggers a sell (0.015 = 1.5%)
+          SELL_THRESHOLD: ${{ vars.SELL_THRESHOLD }}
+          # 1-hour gain % that blocks a buy to avoid chasing a rush (0.02 = 2%)
+          RUSH_PCT: ${{ vars.RUSH_PCT }}
+          # Number of hourly candles used for the SMA (default: 24)
+          SMA_PERIODS: ${{ vars.SMA_PERIODS }}
+          # Set to "true" to log without placing real orders
           DRY_RUN: ${{ vars.DRY_RUN }}
         run: python scripts/trade.py
 
