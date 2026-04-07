@@ -1,0 +1,83 @@
+version: '3.8'
+
+# Nullclaw + Mistral Vibe CLI stack, both powered by Devstral via shared Ollama
+# Usage:
+#   docker compose up -d ollama          # start Ollama first
+#   docker exec -it ollama ollama pull devstral:24b-small-2505
+#   docker compose --profile nullclaw up -d    # autonomous agent
+#   docker compose --profile vibe up -d        # interactive CLI coding agent
+
+services:
+
+  # ── Shared Ollama backend ────────────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    # Uncomment for NVIDIA GPU support:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # ── NullClaw — lightweight autonomous agent ──────────────────────────────────
+  nullclaw:
+    image: ghcr.io/nullclaw/nullclaw:latest
+    container_name: nullclaw
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - nullclaw_data:/nullclaw-data
+      - ./nullclaw-workspace:/workspace   # shared workspace (mount your code here)
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - NULLCLAW_MODEL=${NULLCLAW_MODEL:-devstral:24b-small-2505}
+      # Optional notification env vars (forwarded from .env)
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
+      - SLACK_WEBHOOK_URL=${SLACK_WEBHOOK_URL:-}
+      - DISCORD_WEBHOOK=${DISCORD_WEBHOOK:-}
+    restart: unless-stopped
+    profiles: ["nullclaw"]
+
+  # ── Mistral Vibe CLI — interactive coding agent ──────────────────────────────
+  devstral-vibe:
+    build:
+      context: .
+      dockerfile: Dockerfile.vibe
+    container_name: devstral-vibe
+    depends_on:
+      ollama:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    volumes:
+      - ./vibe-workspace:/workspace       # your project code
+      - ./vibe-config:/root/.config/vibe  # persistent Vibe config / credentials
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - VIBE_MODEL=${VIBE_MODEL:-devstral:24b-small-2505}
+      - VIBE_PROVIDER=ollama
+    working_dir: /workspace
+    # Container stays alive; attach with: docker exec -it devstral-vibe bash
+    command: tail -f /dev/null
+    restart: unless-stopped
+    profiles: ["vibe"]
+
+volumes:
+  ollama_data:    # persists downloaded models across restarts
+  nullclaw_data:  # persists NullClaw state, config, memory
