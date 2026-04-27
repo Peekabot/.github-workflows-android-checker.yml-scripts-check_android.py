@@ -2,7 +2,7 @@
 
 **1 ready-to-use prompts** — paste straight into ChatGPT, Claude, or any AI assistant.
 
-Generated: 2026-04-20
+Generated: 2026-04-27
 
 ---
 
