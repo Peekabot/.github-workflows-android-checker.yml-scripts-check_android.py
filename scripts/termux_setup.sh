@@ -18,18 +18,36 @@ pip install requests beautifulsoup4 anthropic
 ENV_FILE="$HOME/.xchat_checker_env"
 if [ ! -f "$ENV_FILE" ]; then
     cat > "$ENV_FILE" <<'EOF'
-# Fill in the values below, then re-run the checker.
-# Source this file before running: source ~/.xchat_checker_env
+# Fill in the values below, then source before running:
+#   source ~/.xchat_checker_env && python scripts/check_android.py
 
-export ANTHROPIC_API_KEY=""       # Claude API key — https://console.anthropic.com
-export TELEGRAM_BOT_TOKEN=""      # optional
-export TELEGRAM_CHAT_ID=""        # optional
-export SLACK_WEBHOOK_URL=""       # optional
-export DISCORD_WEBHOOK=""         # optional
+# --- Local Devstral via Ollama (preferred, free, offline) ---
+export OLLAMA_HOST="http://localhost:11434"   # default Ollama address
+export OLLAMA_MODEL="devstral"               # model name as pulled in Ollama
+
+# --- Claude API fallback (optional, used only if Ollama is unreachable) ---
+export ANTHROPIC_API_KEY=""                  # https://console.anthropic.com
+
+# --- Notification channels (at least one recommended) ---
+export TELEGRAM_BOT_TOKEN=""
+export TELEGRAM_CHAT_ID=""
+export SLACK_WEBHOOK_URL=""
+export DISCORD_WEBHOOK=""
 EOF
     echo "Created $ENV_FILE — edit it and add your keys."
 else
     echo "$ENV_FILE already exists, skipping."
+fi
+
+# --- Verify Ollama + Devstral are reachable ---
+OLLAMA_OK=false
+if curl -sf http://localhost:11434/api/tags | grep -q "devstral"; then
+    echo "Ollama + devstral detected."
+    OLLAMA_OK=true
+else
+    echo "WARNING: Ollama not running or devstral not pulled."
+    echo "  Start Ollama: ollama serve"
+    echo "  Pull model:   ollama pull devstral"
 fi
 
 # --- Cron job: run every 2 hours ---
