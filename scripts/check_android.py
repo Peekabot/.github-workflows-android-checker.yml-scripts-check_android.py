@@ -77,10 +77,94 @@ def check_sources():
                         "keyword": kw,
                         "url": src["url"],
                         "time": datetime.utcnow().isoformat(),
+                        # Grab a snippet around the keyword for Claude analysis
+                        "snippet": _extract_snippet(content, kw),
                     }
                 )
                 break  # one hit per source is enough
     return detected
+
+
+def _extract_snippet(content, keyword, window=300):
+    """Return up to `window` chars of context around the first keyword match."""
+    idx = content.find(keyword)
+    if idx == -1:
+        return ""
+    start = max(0, idx - window // 2)
+    end = min(len(content), idx + window // 2)
+    return content[start:end].strip()
+
+
+# ---------------------------------------------------------------------------
+# Claude API analysis — optional, activated when ANTHROPIC_API_KEY is set
+# ---------------------------------------------------------------------------
+
+def analyze_with_claude(detections):
+    """
+    Use Claude to verify whether keyword hits are genuine X Chat Android
+    launch signals or noise. Returns a filtered + enriched list.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return detections  # fall back to raw keyword results
+
+    try:
+        import anthropic
+    except ImportError:
+        print("anthropic package not installed — skipping Claude analysis.")
+        return detections
+
+    client = anthropic.Anthropic(api_key=api_key)
+
+    snippets_text = "\n\n".join(
+        f"[{i+1}] Source: {d['source']}\nKeyword hit: '{d['keyword']}'\nSnippet:\n{d['snippet'] or '(no snippet)'}"
+        for i, d in enumerate(detections)
+    )
+
+    prompt = f"""You are monitoring for X Chat (the messaging feature inside the X/Twitter app) launching on Android.
+
+Below are {len(detections)} keyword hit(s) from web sources. For each one, decide:
+- Is this a genuine signal that X Chat is launching / has launched on Android?
+- Or is it noise (unrelated Android news, old articles, generic mentions)?
+
+Respond with a JSON array. Each element must have:
+  "index": (1-based, matching the list below),
+  "genuine": true or false,
+  "confidence": "high" | "medium" | "low",
+  "reason": one sentence
+
+Snippets:
+{snippets_text}
+
+Respond ONLY with the JSON array, no other text."""
+
+    try:
+        message = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        verdicts = json.loads(message.content[0].text)
+    except Exception as e:
+        print(f"Claude analysis failed: {e} — using raw detections.")
+        return detections
+
+    # Attach Claude's verdict to each detection; filter out low-confidence noise
+    enriched = []
+    for v in verdicts:
+        idx = v["index"] - 1
+        if idx < 0 or idx >= len(detections):
+            continue
+        d = detections[idx].copy()
+        d["claude_genuine"] = v.get("genuine", True)
+        d["claude_confidence"] = v.get("confidence", "low")
+        d["claude_reason"] = v.get("reason", "")
+        if v.get("genuine", True):
+            enriched.append(d)
+        else:
+            print(f"Claude filtered out '{d['source']}' ({v.get('reason', '')})")
+
+    return enriched if enriched else detections  # never suppress everything
 
 
 def load_last_hash():
@@ -130,11 +214,15 @@ def send_discord(message):
 
 
 def build_message(detections):
-    lines = "\n".join(
-        f"• {d['source']}: '{d['keyword']}'\n  {d['url']}" for d in detections
-    )
+    lines = []
+    for d in detections:
+        line = f"• {d['source']}: '{d['keyword']}'\n  {d['url']}"
+        if d.get("claude_reason"):
+            line += f"\n  Claude: {d['claude_reason']} ({d.get('claude_confidence', '?')} confidence)"
+        lines.append(line)
+    body = "\n".join(lines)
     timestamp = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-    return f"🚨 <b>X CHAT ANDROID SIGNAL DETECTED!</b>\n\n{lines}\n\nDetected at: {timestamp}"
+    return f"🚨 <b>X CHAT ANDROID SIGNAL DETECTED!</b>\n\n{body}\n\nDetected at: {timestamp}"
 
 
 def main():
@@ -144,6 +232,13 @@ def main():
 
     if not detections:
         print("No new signals.")
+        return
+
+    # Run Claude analysis if API key is present
+    detections = analyze_with_claude(detections)
+
+    if not detections:
+        print("Claude filtered all detections as noise.")
         return
 
     # Deduplicate: skip alert if the exact same set of hits was already reported
