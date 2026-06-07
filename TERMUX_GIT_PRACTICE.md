@@ -1,62 +1,126 @@
-# Practicing git/GitHub from Termux
+# Git Scavenger Hunt (Termux Edition)
 
-A cheat sheet for cloning, editing, and pushing to this repo from your phone.
+Each checkpoint = one thing to type + one thing you should SEE that proves it worked.
+Don't move to the next checkpoint until you see the proof. No proof = something's
+off, and that's fine — just re-read the step.
 
-## 1. One-time setup in Termux
+Type commands exactly as shown, one line at a time, then press Enter.
 
+---
+
+### 🚩 Checkpoint 1 — Open your toolbox
+
+Type:
 ```sh
-pkg update && pkg upgrade
 pkg install git
 ```
+**Proof it worked:** the screen stops scrolling and gives you back the `$` prompt,
+with no red "error" text.
 
-(Optional, only if you want to run the Python checker too: `pkg install python` then `pip install requests`.)
+---
 
-## 2. Get a personal access token
+### 🚩 Checkpoint 2 — Get your "key" (access token)
 
-GitHub no longer accepts your password over the command line. Instead:
+You can't type your GitHub password into git anymore — it needs a special key
+called a token instead.
 
-1. On github.com: Settings → Developer settings → Personal access tokens → Fine-grained tokens
-2. Create one scoped to this repo with read/write access to "Contents" and "Pull requests"
-3. Copy it somewhere safe (you'll paste it as your "password" when git asks)
+1. On your phone's browser, go to github.com → tap your profile picture → **Settings**
+2. Scroll to **Developer settings** → **Personal access tokens** → **Fine-grained tokens**
+3. Tap **Generate new token**, give it access to this one repo, and check the boxes
+   for "Contents" and "Pull requests" (read and write)
+4. Tap generate, then **copy the long string it shows you** — that's your key
 
-## 3. Clone the repo
+**Proof it worked:** you have a long random-looking string copied somewhere safe
+(like your phone's notes app). You'll paste this in Checkpoint 3.
 
+---
+
+### 🚩 Checkpoint 3 — Find the treasure (clone the repo)
+
+Type:
 ```sh
 git clone https://github.com/peekabot/.github-workflows-android-checker.yml-scripts-check_android.py.git repo
+```
+- Username it asks for → your GitHub username
+- Password it asks for → **paste the token from Checkpoint 2** (yes, the token goes
+  in the password slot)
+
+**Proof it worked:** you see lines like `Receiving objects... done.` and you're
+back at the `$` prompt with no errors.
+
+Then step inside it:
+```sh
 cd repo
 ```
+**Proof it worked:** your prompt changes to show `repo` in it.
 
-When prompted: username = your GitHub username, password = the token from step 2.
+---
 
-## 4. Make a branch and a small edit
+### 🚩 Checkpoint 4 — Stake your claim (make a branch)
 
+Type:
 ```sh
 git checkout -b my-test-branch
-echo "edited from termux" >> TERMUX_GIT_PRACTICE.md
 ```
+**Proof it worked:** it prints `Switched to a new branch 'my-test-branch'`.
 
-## 5. Commit and push
+---
 
+### 🚩 Checkpoint 5 — Leave your mark (edit a file)
+
+Type:
+```sh
+echo "edited from termux by [your name here]" >> TERMUX_GIT_PRACTICE.md
+```
+**Proof it worked:** type `cat TERMUX_GIT_PRACTICE.md` and you should see your
+new line at the very bottom of the file.
+
+---
+
+### 🚩 Checkpoint 6 — Bag it (stage and commit)
+
+Type these one at a time:
 ```sh
 git add TERMUX_GIT_PRACTICE.md
 git commit -m "Test edit from Termux"
+```
+**Proof it worked:** the commit prints something like
+`[my-test-branch abc1234] Test edit from Termux` with a file-changed summary.
+
+---
+
+### 🚩 Checkpoint 7 — Send it home (push)
+
+Type:
+```sh
 git push -u origin my-test-branch
 ```
+**Proof it worked:** you see `branch 'my-test-branch' set up to track...` and a
+link that looks like `https://github.com/.../pull/new/my-test-branch`.
 
-## 6. Open a pull request
+---
 
-Easiest from the phone browser: GitHub will show a "Compare & pull request" banner
-right after the push. Tap it, fill in a title, and submit as a draft.
+### 🚩 Checkpoint 8 — Claim your prize (open a pull request)
 
-## 7. Pull future changes
+Open that link from Checkpoint 7 in your phone's browser (or go to the repo on
+github.com — it'll show a banner: "my-test-branch had recent pushes"). Tap
+**Compare & pull request**, give it a title, and submit it as a **draft**.
 
-```sh
-git pull origin main
-```
+**Proof it worked:** you land on a page titled "Test edit from Termux" with a
+green/gray "Draft" label and a number like `#3` next to it.
 
-## Tips
+---
 
-- `git status` — see what's changed before you commit
-- `git log --oneline -5` — see recent commits
-- `git diff` — see your uncommitted edits
-- If push is rejected, run `git pull --rebase origin <branch>` first, then push again
+## 🏆 You did it
+
+You just cloned, branched, edited, committed, pushed, and opened a PR — entirely
+from your phone. That's the whole loop. Everything else in git is a variation
+on these eight moves.
+
+## Bonus round (optional)
+
+- `git status` → "what have I changed that isn't committed yet?"
+- `git log --oneline -5` → "what are the last 5 things that happened here?"
+- `git diff` → "show me my exact edits, line by line"
+- `git pull origin <branch>` → "grab the newest version of a branch"
+- Stuck on a push? Run `git pull --rebase origin <branch>` first, then push again.
