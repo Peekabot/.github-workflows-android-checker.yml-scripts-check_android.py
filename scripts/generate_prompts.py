@@ -4,7 +4,7 @@ generate_prompts.py — Generate a sellable prompt pack for a given topic.
 Usage:
     python scripts/generate_prompts.py "LinkedIn Thought Leadership"
 
-Writes two files under products/<topic>/:
+Writes two files under products/<slug>/:
     prompts.json   — machine-readable pack
     README.md      — human-readable preview / product description
 """
@@ -18,6 +18,11 @@ from datetime import datetime
 from pathlib import Path
 
 NICHE = os.getenv("NICHE", "business").lower().strip()
+
+_config_path = Path(__file__).parent.parent / "config.json"
+_config = json.loads(_config_path.read_text()) if _config_path.exists() else {}
+PROMPT_COUNT = int(os.getenv("PROMPT_COUNT", _config.get("prompt_count", 10)))
+PRICE_CENTS = int(os.getenv("PRICE_CENTS", _config.get("price_cents", 1900)))
 
 SYSTEM_PROMPTS = {
     "business": (
@@ -42,9 +47,6 @@ SYSTEM_PROMPTS = {
     ),
 }
 
-PROMPT_COUNT = 10
-PRICE_CENTS = 1900  # $19.00
-
 
 def system_prompt():
     return SYSTEM_PROMPTS.get(NICHE, SYSTEM_PROMPTS["business"])
@@ -66,7 +68,7 @@ No markdown fences, no explanation outside the JSON array."""
 
     client = anthropic.Anthropic(api_key=api_key)
     response = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-opus-4-8",
         max_tokens=4096,
         system=system_prompt(),
         messages=[{"role": "user", "content": user_msg}],
@@ -93,11 +95,9 @@ def write_outputs(topic: str, prompts: list[dict]) -> Path:
     out_dir = Path("products") / slug
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # JSON
     json_path = out_dir / "prompts.json"
     json_path.write_text(json.dumps(prompts, indent=2))
 
-    # Markdown product description (also useful as Gumroad description)
     lines = [
         f"# {topic} — AI Prompt Pack",
         f"",
@@ -128,13 +128,12 @@ def write_outputs(topic: str, prompts: list[dict]) -> Path:
 
 def main():
     topic = " ".join(sys.argv[1:]).strip() if len(sys.argv) > 1 else "AI Productivity"
-    print(f"Generating prompt pack for: {topic}", file=sys.stderr)
+    print(f"Generating {PROMPT_COUNT} prompts for: {topic}", file=sys.stderr)
 
     try:
         prompts = generate_via_claude(topic)
     except Exception as e:
         print(f"Claude generation failed: {e}", file=sys.stderr)
-        # Structured fallback so the pipeline never hard-fails
         prompts = [
             {
                 "title": f"Expert {topic} Advisor",

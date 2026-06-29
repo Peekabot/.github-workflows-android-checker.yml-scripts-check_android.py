@@ -3,7 +3,7 @@ find_trend.py — Discover a trending topic worth packaging as a prompt pack.
 
 Priority order:
   1. Perplexity API  (real-time web awareness)
-  2. OpenAI GPT-4o   (strong general knowledge fallback)
+  2. Claude          (strong general knowledge fallback)
   3. Hard-coded list  (deterministic last resort)
 
 The NICHE env var (set as a GitHub Actions variable) focuses the search.
@@ -12,8 +12,8 @@ Supported values: business, coding, creative, productivity (default: business)
 
 import os
 import sys
-import json
 import random
+import requests
 import anthropic
 from datetime import datetime
 
@@ -115,7 +115,7 @@ def ask_claude():
     try:
         client = anthropic.Anthropic(api_key=api_key)
         response = client.messages.create(
-            model="claude-opus-4-6",
+            model="claude-opus-4-8",
             max_tokens=64,
             system=(
                 f"You are a trend analyst specialising in {niche_description()}. "
@@ -138,12 +138,11 @@ def ask_claude():
 
 def pick_fallback():
     options = NICHE_FALLBACKS.get(NICHE, NICHE_FALLBACKS["business"])
-    return options[0]
+    return random.choice(options)
 
 
 def main():
     topic = ask_perplexity() or ask_claude() or pick_fallback()
-    # Sanitise for use as a folder name in the workflow
     topic = topic.replace("/", "-").replace("\\", "-")
     print(topic)
 
