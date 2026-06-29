@@ -1,6 +1,6 @@
 """
 Scrapes public bid opportunities from NYS Contract Reporter RSS
-and City of Albany bids page.
+and Capital Region municipal bid pages.
 """
 
 import hashlib
@@ -17,16 +17,25 @@ from store import init_db, upsert_signal
 
 CONFIG = json.loads((Path(__file__).parent.parent / "config.json").read_text())
 
-NYSCR_RSS        = "https://www.nyscr.ny.gov/rss/nyscr.rss"
-ALBANY_BIDS_URL  = "https://www.albanyny.gov/Bids.aspx"
+NYSCR_RSS  = "https://www.nyscr.ny.gov/rss/nyscr.rss"
+
+# (url, source_key, base_domain)
+MUNICIPAL_BID_PAGES = [
+    ("https://www.albanyny.gov/Bids.aspx",                        "albany-bids",      "https://www.albanyny.gov"),
+    ("https://www.schenectadyny.gov/bids",                        "schenectady-bids", "https://www.schenectadyny.gov"),
+    ("https://www.troyny.gov/city-government/bids-rfps/",         "troy-bids",        "https://www.troyny.gov"),
+    ("https://www.saratogaspringscity.com/bids",                  "saratoga-bids",    "https://www.saratogaspringscity.com"),
+    ("https://www.albanycounty.com/departments/purchasing/bids",  "albany-county-bids", "https://www.albanycounty.com"),
+]
 
 REGION_TERMS = ["albany", "schenectady", "troy", "rensselaer", "capital region", "colonie", "saratoga", "guilderland", "latham"]
 HIGH_VALUE   = CONFIG["keywords"]["services"] + CONFIG["keywords"]["high_value"]
+BID_MARKERS  = ["bid", "rfp", "rfq", "proposal", "solicitation", "quote", "contract"]
 
 
 def score_bid(title: str, body: str = "") -> int:
     text = (title + " " + body).lower()
-    score = 5  # bids are high-value by default
+    score = 5
     for term in HIGH_VALUE:
         if term in text:
             score += 3
@@ -60,12 +69,12 @@ def fetch_nyscr() -> int:
     return count
 
 
-def fetch_albany_bids() -> int:
+def fetch_municipal_bids(page_url: str, source_key: str, base_domain: str) -> int:
     try:
-        resp = requests.get(ALBANY_BIDS_URL, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
+        resp = requests.get(page_url, timeout=15, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
     except Exception as e:
-        print(f"  Albany bids error: {e}", file=sys.stderr)
+        print(f"  {source_key} error: {e}", file=sys.stderr)
         return 0
 
     soup = BeautifulSoup(resp.text, "lxml")
@@ -78,12 +87,12 @@ def fetch_albany_bids() -> int:
             continue
 
         lowered = (title + " " + href).lower()
-        if not any(k in lowered for k in ["bid", "rfp", "rfq", "proposal", "solicitation"]):
+        if not any(k in lowered for k in BID_MARKERS):
             continue
 
-        url = href if href.startswith("http") else f"https://www.albanyny.gov{href}"
-        signal_id = hashlib.md5(url.encode()).hexdigest()
-        upsert_signal(signal_id, "albany-bids", "demand", title, "", url, score_bid(title))
+        url = href if href.startswith("http") else f"{base_domain}{href}"
+        signal_id = hashlib.md5(f"{source_key}-{url}".encode()).hexdigest()
+        upsert_signal(signal_id, source_key, "demand", title, "", url, score_bid(title))
         count += 1
 
     return count
@@ -92,7 +101,9 @@ def fetch_albany_bids() -> int:
 def main():
     init_db()
     print(f"  NYSCR (Capital Region filter): {fetch_nyscr()} bids")
-    print(f"  Albany city bids: {fetch_albany_bids()} bids")
+    for page_url, source_key, base_domain in MUNICIPAL_BID_PAGES:
+        n = fetch_municipal_bids(page_url, source_key, base_domain)
+        print(f"  {source_key}: {n} bids")
 
 
 if __name__ == "__main__":

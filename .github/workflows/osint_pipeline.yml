@@ -19,7 +19,9 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          PLAYWRIGHT_BROWSERS_PATH=/opt/pw-browsers playwright install chromium --with-deps 2>/dev/null || true
 
       - name: Run OSINT pipeline
         env:

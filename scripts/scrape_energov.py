@@ -1,69 +1,126 @@
 """
-Energov / Tyler Self-Service permit portal signals for Capital Region.
+Energov / Tyler Self-Service permit portal scraper for Capital Region.
 
-Albany portal is Angular SPA - full table scrape needs browser automation (Selenium/Playwright).
-For now: surfaces the portal as high-value demand signal + parses any static text.
-Future: add Playwright job or local iOS/Pythonista agent for interactive search by address/zip.
+Albany portal is an Angular SPA — uses Playwright to navigate and extract
+recent permit activity. High signal for upcoming construction/reno/trade work.
 """
 
 import hashlib
 import json
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
-
-import requests
-from bs4 import BeautifulSoup
 
 sys.path.insert(0, str(Path(__file__).parent))
 from store import init_db, upsert_signal
 
 CONFIG = json.loads((Path(__file__).parent.parent / "config.json").read_text())
 
-ENERGOV_ALBANY_SEARCH = "https://albanyny-energovpub.tylerhost.net/Apps/SelfService#/search"
-ENERGOV_ALBANY_HOME = "https://albanyny-energovpub.tylerhost.net/Apps/SelfService#/home"
+PORTALS = [
+    {
+        "name": "Albany",
+        "url": "https://albanyny-energovpub.tylerhost.net/Apps/SelfService#/search",
+        "source": "energov-albany",
+    },
+]
 
-REGION_ZIPS = CONFIG["region"]["zip_codes"]
+PERMIT_KEYWORDS = [
+    "building", "electrical", "plumbing", "mechanical", "renovation",
+    "addition", "construction", "grading", "excavation", "site work",
+    "occupancy", "demolition", "roofing", "hvac", "rop",
+]
 
-PERMIT_KEYWORDS = ["building", "electrical", "plumbing", "mechanical", "renovation", "addition", "construction", "grading", "excavation", "site work", "occupancy", "rop", "permit"]
 
-
-def score_permit(text: str) -> int:
-    t = text.lower()
-    score = 7  # permits = strong upcoming work signal
+def score_permit(permit_type: str, description: str = "") -> int:
+    text = (permit_type + " " + description).lower()
+    score = 7
     for kw in PERMIT_KEYWORDS:
-        if kw in t:
+        if kw in text:
             score += 2
             break
-    if any(z in t for z in REGION_ZIPS):
-        score += 1
     return min(score, 12)
 
 
-def fetch_energov_portal() -> int:
-    count = 0
-    for url in [ENERGOV_ALBANY_HOME, ENERGOV_ALBANY_SEARCH]:
-        try:
-            resp = requests.get(url, timeout=20, headers={"User-Agent": "Mozilla/5.0 (compatible; XtraHandsBot/1.0)"})
-            resp.raise_for_status()
-            soup = BeautifulSoup(resp.text, "lxml")
-            text = soup.get_text(separator=" ", strip=True)[:2000]
+def scrape_with_playwright(portal: dict) -> int:
+    try:
+        from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+    except ImportError:
+        print("  Playwright not installed — skipping Energov.", file=sys.stderr)
+        return 0
 
-            if "permit" in text.lower() or "search" in text.lower() or "self service" in text.lower():
-                title = f"Albany Energov Permit Portal - {url.split('#')[-1]}"
-                desc = text[:400] + "... (SPA - use advanced search for Code Cases / ROPs by address or zip)"
-                link = url
-                signal_id = hashlib.md5(link.encode()).hexdigest()
-                upsert_signal(signal_id, "energov-albany", "demand", title, desc, link, score_permit(text))
-                count += 1
-                print(f"  Captured portal signal from {url}")
+    count = 0
+    cutoff = (datetime.now() - timedelta(days=7)).strftime("%m/%d/%Y")
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+
+        try:
+            page.goto(portal["url"], timeout=30000, wait_until="networkidle")
+            page.wait_for_selector("input, select, [placeholder]", timeout=15000)
+
+            # Fill date filter if present
+            date_inputs = page.query_selector_all(
+                "input[type='date'], input[placeholder*='date' i], input[placeholder*='Date' i]"
+            )
+            if date_inputs:
+                date_inputs[0].fill(cutoff)
+                page.keyboard.press("Tab")
+
+            # Submit search
+            for label in ["Search", "search", "Submit", "Find"]:
+                btn = page.query_selector(f"button:has-text('{label}')")
+                if btn:
+                    btn.click()
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                    break
+
+            rows = page.query_selector_all("table tbody tr, .result-row, [class*='result']")
+
+            if not rows:
+                # Fallback: pull text blocks that look like permit entries
+                text_content = page.inner_text("body")
+                lines = [l.strip() for l in text_content.splitlines() if len(l.strip()) > 20]
+                for line in lines[:50]:
+                    if any(kw in line.lower() for kw in PERMIT_KEYWORDS):
+                        signal_id = hashlib.md5(f"{portal['name']}-{line}".encode()).hexdigest()
+                        upsert_signal(signal_id, portal["source"], "demand",
+                                      f"Permit signal: {line[:80]}", line[:300],
+                                      portal["url"], score_permit(line))
+                        count += 1
+            else:
+                for row in rows[:50]:
+                    text = row.inner_text().strip()
+                    if not text or len(text) < 10:
+                        continue
+                    cells = row.query_selector_all("td")
+                    permit_type = cells[0].inner_text().strip() if cells else text[:60]
+                    address     = cells[1].inner_text().strip() if len(cells) > 1 else ""
+                    title = f"{permit_type} — {address}" if address else permit_type
+                    signal_id = hashlib.md5(f"{portal['name']}-{text}".encode()).hexdigest()
+                    upsert_signal(signal_id, portal["source"], "demand",
+                                  title, text[:300], portal["url"],
+                                  score_permit(permit_type, text))
+                    count += 1
+
+        except PWTimeout:
+            print(f"  Energov timeout on {portal['name']} — SPA may not have loaded.", file=sys.stderr)
         except Exception as e:
-            print(f"  Energov fetch error for {url}: {e}", file=sys.stderr)
+            print(f"  Energov error on {portal['name']}: {e}", file=sys.stderr)
+        finally:
+            browser.close()
+
     return count
 
 
 def main():
     init_db()
-    print(f"  Energov Albany portal: {fetch_energov_portal()} signals (stub - SPA aware)")
+    total = 0
+    for portal in PORTALS:
+        n = scrape_with_playwright(portal)
+        print(f"  Energov {portal['name']}: {n} permit signals")
+        total += n
+    print(f"Energov total: {total} signals")
 
 
 if __name__ == "__main__":
