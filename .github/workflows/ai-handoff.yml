@@ -1,0 +1,78 @@
+name: AI Handoff
+
+# Triggered manually or by the pipeline to pass context between Claude and Grok.
+# Drop a JSON brief into handoff/brief.json and run this workflow.
+# The brief is committed to the repo so both AIs can read/write it async.
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_ai:
+        description: 'Which AI is handing off (claude | grok)'
+        required: true
+        default: 'claude'
+      message:
+        description: 'Short summary of what was done and what needs doing next'
+        required: true
+      priority:
+        description: 'What the receiving AI should tackle first'
+        required: false
+        default: ''
+
+jobs:
+  handoff:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Write handoff brief
+        run: |
+          mkdir -p handoff
+          python3 - <<'EOF'
+          import json, os
+          from datetime import datetime
+
+          brief_path = "handoff/brief.json"
+
+          try:
+              with open(brief_path) as f:
+                  history = json.load(f).get("history", [])
+          except (FileNotFoundError, json.JSONDecodeError):
+              history = []
+
+          entry = {
+              "timestamp": datetime.utcnow().isoformat(),
+              "from":      os.environ["FROM_AI"],
+              "message":   os.environ["MESSAGE"],
+              "priority":  os.environ["PRIORITY"],
+          }
+          history.append(entry)
+
+          brief = {
+              "last_updated": entry["timestamp"],
+              "last_from":    entry["from"],
+              "current_task": entry["priority"] or entry["message"],
+              "history":      history[-20:],  # keep last 20 entries
+          }
+
+          with open(brief_path, "w") as f:
+              json.dump(brief, f, indent=2)
+
+          print(f"Handoff written: {entry['from']} → {brief_path}")
+          EOF
+        env:
+          FROM_AI:  ${{ inputs.from_ai }}
+          MESSAGE:  ${{ inputs.message }}
+          PRIORITY: ${{ inputs.priority }}
+
+      - name: Commit handoff brief
+        run: |
+          git config user.name  'github-actions'
+          git config user.email 'actions@github.com'
+          git add handoff/brief.json
+          git pull --rebase origin ${{ github.ref_name }} || true
+          git commit -m "AI handoff: ${{ inputs.from_ai }} → [$(date -u +%Y-%m-%d)] [skip ci]"
+          git push

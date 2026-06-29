@@ -1,13 +1,21 @@
 {
-  "price_cents": 1900,
-  "prompt_count": 10,
-  "cron": {
-    "product_drop": "0 9 * * 1",
-    "android_check": "0 */2 * * *"
+  "region": {
+    "name": "Capital Region NY",
+    "craigslist_subdomain": "albany",
+    "state": "NY",
+    "counties": ["Albany", "Schenectady", "Rensselaer", "Saratoga"],
+    "zip_codes": ["12201", "12203", "12205", "12206", "12207", "12208", "12209", "12210", "12302", "12303", "12304", "12305", "12308", "12309", "12180", "12182"]
   },
-  "sources": {
-    "trend_finder": ["perplexity", "claude", "fallback"],
-    "deployment": ["gumroad"]
+  "keywords": {
+    "services": ["cleaning", "landscaping", "handyman", "painting", "moving", "plumbing", "electrical", "roofing", "catering", "food", "delivery", "construction", "renovation", "repair", "maintenance"],
+    "high_value": ["commercial", "contract", "recurring", "weekly", "ongoing", "multiple", "regular"]
   },
-  "notifications": ["telegram", "slack", "discord"]
+  "scoring": {
+    "min_score": 5,
+    "alert_threshold": 8
+  },
+  "notifications": {
+    "telegram": true,
+    "discord": true
+  }
 }
